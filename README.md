@@ -1,17 +1,63 @@
 # Guarantee_Agent
 
+【进一步目标：容器化】
+
 让 Markdown 测试用例自己跑起来的 AI 测试工具。核心理念：**文档即测试**。你用 Markdown 写好验收用例，AI 自动控制真实浏览器帮你执行，记录每一步操作，成功的用例还能导出成 Playwright 测试代码。
 
 ## 能做什么
 
-1. **解析 Markdown 测试用例**：支持 `## Preconditions`（前置条件）+ 有序步骤 + `Expected:`（期望结果）+ `include:`（复用 `steps/` 下的步骤片段）+ 严格的 `{{变量}}` 模板语法。
+1. **解析 Markdown 测试用例**：支持中英文标题（`## Preconditions`/`## 前置条件`、`## Steps`/`## 步骤`）+ 有序步骤 + 期望结果（`Expected:`/`预期:`）+ `include:`（复用 `steps/` 下的步骤片段）+ 严格的 `{{变量}}` 模板语法（变量从环境自由读取，见下文）。
 2. **用真实浏览器跑**：通过 Playwright Chromium 驱动（**在你本机拉起一个真实 Chromium 让 AI 操控它**），AI 自主决定调用哪些工具（打开网页 / 点击 / 填写 / 下拉选择 / 滚动 / 等待 / 验证文字出现 / 验证元素可见 / 读取页面快照），在真实网页上跑。
 3. **AI 自主驱动**：默认接入豆包 Ark 的 Responses API（模型 `deepseek-v4-pro-260425`），让 AI 自己规划该调什么工具；有保护机制（最大调用次数 / 连续出错 / 单步重试）+ "断言必须真成功"硬校验，防止 AI 糊弄过去假装通过了。
-4. **记录操作日志并支持导出**：每次工具调用都会写入 `Guarantee_Agent/.autoqa/runs/<runId>/ir.jsonl`；跑成功的用例会自动导出为 `Guarantee_Agent/tests/autoqa/test_<name>.py`。【注：`ir.jsonl` 一行就是一个 [ActionRecord](vscode-webview://08tl54h03nehmajltabign5atut4qdnbg8duc5m4gtdh2hobd9mu/internal/ir/types.go)，字段是机器消费导向的，便于导出测试代码】
+4. **记录操作日志并支持导出**：每次工具调用都会写入 `Guarantee_Agent/.autoqa/runs/<runId>/ir.jsonl`；跑成功的用例会自动导出为 `Guarantee_Agent/tests/autoqa/test_<name>.py`。【注：`ir.jsonl` 一行就是一个 [ActionRecord](vscode-webview://08tl54h03nehmajltabign5atut4qdnbg8duc5m4gtdh2hobd9mu/internal/ir/types.go)，字段是机器消费导向的，即便于导出测试代码用来消费】
 
-5. **自动生成测试用例**：`autoqa plan` 让 AI 先探索网页，再根据探索结果自动生成 Markdown 测试用例，生成的用例可以直接被 `autoqa run` 跑起来。
+5. **自动生成测试用例**：`autoqa plan` 让 AI 先探索网页，再自动生成一份 Markdown 用例（生成后自检能否解析），生成的用例可直接交给 `autoqa run` 跑起来。
 
-CLI 子命令：`init`、`run <file-or-dir>`、`plan`、`plan-explore`、`plan-generate`；退出码 `0` 成功、`1` 运行失败、`2` 配置错误。
+## autoqa的CLI命令一览
+
+| 命令 | 作用 | 退出码 |
+|---|---|---|
+| `init` | 初始化配置和示例用例 | `0` 成功 |
+| `run <文件或目录>` | 用 AI + 真实浏览器执行用例，成功后导出 Python 测试 | `0` 全过 / `1` 有失败 / `2` 配置错 |
+| `plan` | 探索网页 + 生成 Markdown 用例（一步到位） | `0` 成功 / `1` 运行错 / `2` 配置错 |
+| `plan-explore` | 只探索网页，写出探索结果（**summary.json**  区别于跑用例时的操作记录流水**ir.jsonl**） | 同上 |
+| `plan-generate` | 只从探索结果生成用例 | 同上 |
+
+退出码统一：`0` 成功、`1` 运行失败、`2` 配置错误。
+
+## 整体流程图
+
+```
+            Markdown 用例(.md)
+                    │
+        ┌───────────┴───────────┐
+        │   autoqa run          │
+        │  解析 → 渲染变量 →      │
+        │  AI(豆包) ReAct 循环   │
+        │  驱动 Playwright 浏览器 │
+        └───────────┬───────────┘
+                    │
+        ┌───────────┼───────────┐
+        ▼           ▼           ▼
+   ir.jsonl    run.log.jsonl  成功?
+   (操作记录)   (运行日志)      │
+                              是 ─→ 导出 tests/autoqa/test_<名>.py
+                              否 ─→ 退出码 1,保留记录供排查
+                                   (去 .autoqa/runs/<runId>/ 翻:
+                                    ir.jsonl 看每步调了啥/哪步失败,
+                                    run.log.jsonl 看失败原因)
+
+  ┌─────────────────────────────────────────────┐
+  │  autoqa plan = plan-explore + plan-generate │
+  │                                             │
+  │  plan-explore: 探索网页 → 探索结果             │
+  │     (探索结果 = summary.json,不是 ir.jsonl)   │
+  │                ↓                            │
+  │  plan-generate: 读 summary.json → AI 生成 .md│
+  │                ↓                            │
+  │        生成的用例可被 run 直接执行              │
+  └─────────────────────────────────────────────┘
+```
 
 ## 技术栈
 
@@ -35,11 +81,11 @@ go run github.com/playwright-community/playwright-go/cmd/playwright install chro
 # 2) 配置豆包 API key
 export ARK_API_KEY=你的key   # 或者写到 .env 文件里
 
-# 3) 初始化 + 跑测试用例
+# 3) 初始化 + 跑`测试用例` （--force覆盖已存在的配置文件重写；）
 go run ./cmd/autoqa init --force
 go run ./cmd/autoqa run specs/example.md --url http://localhost:8080 --headless
 
-# 4) 让 AI 自动生成测试用例，然后跑起来
+# 4) 让 AI 自动生成测试用例，然后跑起来（--headless 令Chromium无界面运行）
 go run ./cmd/autoqa plan --url http://localhost:8080 --headless
 go run ./cmd/autoqa run specs/ --url http://localhost:8080 --headless
 ```
@@ -48,18 +94,25 @@ go run ./cmd/autoqa run specs/ --url http://localhost:8080 --headless
 
 ## Markdown 用例格式
 
+支持中英文混写：标题可用 `## Preconditions`/`## 前置条件`、`## Steps`/`## 步骤`；断言步骤以 `Verify`/`Assert` 或 `验证`/`断言` 开头；期望结果用 `Expected:` 或 `预期:` 声明。
+
 ```markdown
 # 登录冒烟测试
 
-## Preconditions
+## 前置条件
 - 应用已启动。
 
-## Steps
+## 步骤
 1. 打开 {{BASE_URL}}
 2. 验证页面上能看到 "Example" 文字
+   - 预期: 进入首页
 ```
 
-支持的变量：`{{BASE_URL}}`、`{{LOGIN_BASE_URL}}`、`{{ENV}}`、`{{USERNAME}}`、`{{PASSWORD}}`（变量不存在或值为空会报错，不会悄悄跳过）。可以用 `include: login` 引用 `steps/login.md` 文件中的步骤，被引用片段会原地展开并与后续步骤合并成一个连续的有序列表（不支持嵌套 include）。可运行的示例见 `testdata/specs/login_flow.md` + `testdata/steps/login.md`：片段里用 `{{USERNAME}}`/`{{PASSWORD}}` 复用变量并用 `Expected:` 声明预期，外层用例以 `include: login` 接入后继续编号 `4.`、`5.`。
+**变量**：用 `{{变量名}}` 引用。变量来自环境——所有 `AUTOQA_` 开头的环境变量去掉前缀即为变量名（如 `.env` 里 `AUTOQA_USERNAME=alice` → 用例里 `{{USERNAME}}`），外加内置的 `{{BASE_URL}}`、`{{LOGIN_BASE_URL}}`、`{{ENV}}`。变量不存在或值为空会报错，不会悄悄跳过。
+
+> 提示：敏感值（账号密码、token）最好直接在用例里写死，而不是放进 `.env` 用模板注入——模板值会被记录到 IR/日志/导出文件里，容易泄露。
+
+**复用步骤**：用 `include: login` 引用 `steps/login.md` 里的步骤片段，原地展开并与后续步骤合并成一个连续的有序列表（不支持嵌套 include）。可运行示例见 `testdata/specs/login_flow.md` + `testdata/steps/login.md`：片段用 `{{USERNAME}}`/`{{PASSWORD}}` 复用变量并用 `预期:` 声明预期，外层用例以 `include: login` 接入后继续编号 `4.`、`5.`。
 
 ## 项目结构
 
@@ -119,7 +172,7 @@ cli.newRunCommand.RunE                            [internal/cli/run.go]
         └─ 对每个测试用例:
              ├─ markdown.ExpandIncludes           [internal/markdown/include.go]
              ├─ markdown.RenderTemplate           [internal/markdown/template.go]
-             │     替换 {{BASE_URL}} {{LOGIN_BASE_URL}} {{ENV}} {{USERNAME}} {{PASSWORD}}
+             │     替换 {{变量}}:内置 BASE_URL/LOGIN_BASE_URL/ENV + 所有 AUTOQA_* 环境变量
              ├─ markdown.Parse                    [internal/markdown/parse.go]
              └─ agent.Runner.Run(ctx, opts)       [internal/agent/runner.go]
                   ├─ browser.NewPage              [internal/browser/browser.go]

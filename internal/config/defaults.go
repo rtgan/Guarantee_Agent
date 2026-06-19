@@ -33,7 +33,7 @@ var DefaultPlanConfig = PlanConfig{
 // API key 从 ARK_API_KEY 环境变量读取(.env 注入),不要写进配置文件。
 var DefaultModelConfig = ModelConfig{
 	Provider:  "ark",
-	Model:     "deepseek-v4-pro-260425",
+	Model:     "deepseek-v4-flash-260425",
 	APIKeyEnv: "ARK_API_KEY",
 	MaxTurns:  50,
 	MaxTokens: 4096,

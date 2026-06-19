@@ -94,16 +94,42 @@ func sanitize(s string) string {
 	return strings.Trim(b.String(), "-")
 }
 
-// exportAssertionTarget 与 agent.assertionTarget 保持一致:去掉 Verify/Assert
-// 前缀和常见可见性后缀,使导出的测试断言与运行时实际断言的文本对齐。
+// exportAssertionTarget 从断言步骤文本里抽取要断言的目标文本,尽量与运行时
+// AI 实际断言的文本对齐。规则:
+//   - 先去掉 Verify/Assert/验证/断言 前缀;
+//   - 若剩余文本含引号("..."或“...”),优先取第一段引号内内容(用例里断言目标
+//     通常写在引号里,如 验证...能看到 "Example Domain" 文字);
+//   - 否则去掉常见可见性后缀(text is visible / 可见 等)后用整句。
 func exportAssertionTarget(s string) string {
 	s = strings.TrimSpace(s)
 	for _, p := range []string{"Verify", "Assert", "验证", "断言"} {
 		s = strings.TrimPrefix(s, p)
 	}
 	s = strings.TrimSpace(s)
+	// 优先取引号内内容(支持中英文引号)。
+	if q := firstQuoted(s); q != "" {
+		return q
+	}
 	for _, suffix := range []string{" text is visible", " is visible", " text exists", " exists", "可见", "存在"} {
 		s = strings.TrimSuffix(s, suffix)
 	}
 	return strings.TrimSpace(s)
+}
+
+// firstQuoted 返回 s 中第一段被引号包裹的内容(支持 "..."、“...” 和 '...'),没有则返回 ""。
+func firstQuoted(s string) string {
+	for _, pair := range [][2]string{{`"`, `"`}, {"“", "”"}, {"'", "'"}} {
+		l, r := pair[0], pair[1]
+		i := strings.Index(s, l)
+		if i < 0 {
+			continue
+		}
+		rest := s[i+len(l):]
+		j := strings.Index(rest, r)
+		if j < 0 {
+			continue
+		}
+		return strings.TrimSpace(rest[:j])
+	}
+	return ""
 }
