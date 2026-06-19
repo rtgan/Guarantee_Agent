@@ -92,6 +92,50 @@ go run ./cmd/autoqa run specs/ --url http://localhost:8080 --headless
 
 模型配置在 `autoqa.config.json` 的 `model` 段；默认 `provider=ark`、`model=deepseek-v4-pro-260425`，API key 从 `ARK_API_KEY` 环境变量读取。设置 `provider=eino-script` 可以切换到离线确定性模式（不调 AI，仅用于测试开发）。
 
+## 配置文件 `autoqa.config.json`
+
+`autoqa init` 生成，`autoqa run`/`plan` 启动时读取。优先级：命令行 flag > 环境变量 > 本文件 > 代码默认值。四大块：
+
+**顶层**
+
+| 字段 | 说明 |
+|---|---|
+| `schemaVersion` | 配置文件版本号（当前 `1`），便于后续升级格式时兼容判断。 |
+
+**`guardrails`** — 跑测试（`run`）时的安全上限，防 AI 失控
+
+| 字段 | 说明 |
+|---|---|
+| `maxToolCallsPerSpec` | 单个用例最多调用工具次数，超限判失败（`GUARDRAIL_MAX_TOOL_CALLS`）。 |
+| `maxConsecutiveErrors` | 连续失败次数上限，超限即停（`GUARDRAIL_MAX_CONSECUTIVE_ERRORS`）。 |
+| `maxRetriesPerStep` | 同一步骤最多重试次数（`GUARDRAIL_MAX_RETRIES_PER_STEP`）。 |
+
+**`model`** — 用哪个 AI 模型
+
+| 字段 | 说明 |
+|---|---|
+| `provider` | 模型提供商：`ark`=豆包真实模型；`eino-script`=离线脚本模式（不调 AI，开发测试用）。 |
+| `model` | 具体模型名。 |
+| `apiKeyEnv` | API key 从哪个环境变量读（key 不写进配置文件）。 |
+| `maxTurns` | 单用例最多与模型交互轮数。 |
+| `maxTokens` | 每次模型回复最大 token 数。 |
+
+**`plan`** — `autoqa plan` 自动生成用例时的探索策略
+
+| 字段 | 说明 |
+|---|---|
+| `maxDepth` | 从首页起最多点几层链接深度。 |
+| `maxPages` | 一次探索最多覆盖多少页面。 |
+| `includePatterns` / `excludePatterns` | URL 白名单 / 黑名单（exclude 优先，空表示不限）。 |
+| `exploreScope` | 探索范围：`site`（整站）/ `focused`（聚焦）/ `single_page`（单页）。 |
+| `testTypes` | 生成哪几类用例：功能 / 表单 / 导航 / 响应式 / 边界 / 安全。 |
+| `guardrails.maxAgentTurnsPerRun` | 一次 plan 最多与 AI 交互轮数。 |
+| `guardrails.maxSnapshotsPerRun` | 一次 plan 最多抓取页面快照次数。 |
+| `guardrails.maxPagesPerRun` | 一次 plan 最多处理页面数。 |
+| `guardrails.maxTokenPerRun` | 一次 plan 最多消耗 token 数。 |
+
+**`exportDir`** — 成功用例导出目录，跑成功的用例会导出为 Playwright `.py` 文件到此目录（如 `tests/autoqa/test_<name>.py`）。
+
 ## Markdown 用例格式
 
 支持中英文混写：标题可用 `## Preconditions`/`## 前置条件`、`## Steps`/`## 步骤`；断言步骤以 `Verify`/`Assert` 或 `验证`/`断言` 开头；期望结果用 `Expected:` 或 `预期:` 声明。

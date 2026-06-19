@@ -44,14 +44,14 @@ func newInitCommand() *cobra.Command {
 	return cmd
 }
 
-// exampleSpec 是 init 写出的示例 Markdown 用例。
-const exampleSpec = `# Example
+// exampleSpec 是 init 写出的示例 Markdown 用例（中文，演示中英文混写）。
+const exampleSpec = `# 冒烟测试
 
-## Preconditions
-- The test fixture server or target application is available.
+## 前置条件
+- 测试页面已可访问。
 
-## Steps
-1. Navigate to {{BASE_URL}}
-   - Expected: the page loads
-2. Verify Example text is visible
+## 步骤
+1. 打开 {{BASE_URL}}
+   - 预期: 页面加载完成
+2. 验证页面上能看到 "Example" 文字
 `
