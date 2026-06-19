@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "guardrails": {
+    "maxToolCallsPerSpec": 200,
+    "maxConsecutiveErrors": 8,
+    "maxRetriesPerStep": 5
+  },
+  "exportDir": "tests/autoqa",
+  "model": {
+    "provider": "ark",
+    "model": "deepseek-v4-flash-260425",
+    "apiKeyEnv": "ARK_API_KEY",
+    "maxTurns": 50,
+    "maxTokens": 4096
+  },
+  "plan": {
+    "maxDepth": 3,
+    "maxPages": 50,
+    "includePatterns": [],
+    "excludePatterns": [],
+    "exploreScope": "site",
+    "testTypes": [
+      "functional",
+      "form",
+      "navigation",
+      "responsive",
+      "boundary",
+      "security"
+    ],
+    "guardrails": {
+      "maxAgentTurnsPerRun": 1000,
+      "maxSnapshotsPerRun": 500,
+      "maxPagesPerRun": 100,
+      "maxTokenPerRun": 5000000
+    }
+  }
+}
