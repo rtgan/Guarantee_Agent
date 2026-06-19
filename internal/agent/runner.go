@@ -221,14 +221,17 @@ func parseStepIndexFromArgs(args string) int {
 }
 
 // systemRules 是给模型的系统级硬规则,补充 BuildPrompt 中的任务细节。
+// 用例可能是中文或英文,规则里同时列出两种断言关键字,确保中文用例的"验证/断言"步骤也被强制断言。
 func systemRules() string {
 	return strings.TrimSpace(`You are an AutoQA browser testing agent.
 You operate a real browser ONLY through the provided tools.
 Always include stepIndex in every tool call matching the current Markdown step you are working on.
 Execute steps strictly in order: finish step N (including its assertion) before step N+1.
 Before clicking/filling/asserting, call snapshot to see the page.
-CRITICAL: every step that has an "Expected:" clause OR starts with Verify/Assert MUST end with a successful assertion tool call (assertTextPresent or assertElementVisible) using THAT step's stepIndex. Do not defer a step's assertion to a later step.
-Never claim success without a successful assertion for every required step. When all steps are done, reply with a short summary and no tool calls.`)
+The spec may be written in Chinese or English. Treat these as assertion steps that MUST end with a successful assertion tool call (assertTextPresent or assertElementVisible) using THAT step's stepIndex:
+  - steps starting with Verify / Assert (English), or 验证 / 断言 (Chinese);
+  - any step with an "Expected:" or "预期:" clause.
+Do not defer a step's assertion to a later step. Never claim success without a successful assertion for every required step. When all steps are done, reply with a short summary and no tool calls.`)
 }
 
 // stepText 按步骤序号查找其可读文本(用于 IR 记录)。

@@ -130,18 +130,24 @@ func (r *Registry) EinoTools() ([]tool.BaseTool, error) {
 		// 只记录文本长度,绝不记录原始值,避免泄露密钥。
 		return report(ToolFill, in.StepIndex, in, OK("filled", map[string]any{"target": target, "textLength": len(in.Text)})), nil
 	})
-	selectTool, err := utils.InferTool[SelectInput, Result](ToolSelectOption, "Select an option", func(ctx context.Context, in SelectInput) (Result, error) {
+	selectTool, err := utils.InferTool[SelectInput, Result](ToolSelectOption, "Select an option in a <select> dropdown", func(ctx context.Context, in SelectInput) (Result, error) {
 		target := firstNonEmpty(in.Ref, in.TargetDescription)
 		val := firstNonEmpty(in.Label, in.Value)
-		if err := r.Page.Fill(target, val); err != nil {
+		if err := r.Page.SelectOption(target, val); err != nil {
 			return report(ToolSelectOption, in.StepIndex, in, Fail("ELEMENT_NOT_FOUND", err.Error(), true)), nil
 		}
-		return report(ToolSelectOption, in.StepIndex, in, OK("selected", map[string]any{"target": target})), nil
+		return report(ToolSelectOption, in.StepIndex, in, OK("selected", map[string]any{"target": target, "value": val})), nil
 	})
-	scroll, err := utils.InferTool[ScrollInput, Result](ToolScroll, "Scroll page", func(ctx context.Context, in ScrollInput) (Result, error) {
+	scroll, err := utils.InferTool[ScrollInput, Result](ToolScroll, "Scroll the page", func(ctx context.Context, in ScrollInput) (Result, error) {
+		if err := r.Page.Scroll(firstNonEmpty(in.Direction, "down")); err != nil {
+			return report(ToolScroll, in.StepIndex, in, Fail("SCROLL_FAILED", err.Error(), true)), nil
+		}
 		return report(ToolScroll, in.StepIndex, in, OK("scrolled", map[string]any{"direction": firstNonEmpty(in.Direction, "down")})), nil
 	})
 	waitTool, err := utils.InferTool[WaitInput, Result](ToolWait, "Wait for milliseconds", func(ctx context.Context, in WaitInput) (Result, error) {
+		if err := r.Page.Wait(in.Milliseconds); err != nil {
+			return report(ToolWait, in.StepIndex, in, Fail("WAIT_FAILED", err.Error(), true)), nil
+		}
 		return report(ToolWait, in.StepIndex, in, OK("waited", map[string]any{"milliseconds": in.Milliseconds})), nil
 	})
 	assertText, err := utils.InferTool[AssertTextInput, Result](ToolAssertTextPresent, "Assert text is present", func(ctx context.Context, in AssertTextInput) (Result, error) {

@@ -110,6 +110,52 @@ func (p *Page) Fill(target, text string) error {
 	return nil
 }
 
+// Scroll 滚动页面。direction 为 "up"/"down"(默认 down),用鼠标滚轮事件滚动一屏。
+func (p *Page) Scroll(direction string) error {
+	if p.page == nil {
+		return fmt.Errorf("page not ready")
+	}
+	delta := "window.scrollBy(0, window.innerHeight)"
+	if strings.EqualFold(direction, "up") {
+		delta = "window.scrollBy(0, -window.innerHeight)"
+	}
+	_, err := p.page.Evaluate(delta)
+	return err
+}
+
+// Wait 阻塞指定毫秒。用于在异步 UI 出现前等待。
+func (p *Page) Wait(milliseconds int) error {
+	if milliseconds <= 0 {
+		milliseconds = 500
+	}
+	p.page.WaitForTimeout(float64(milliseconds))
+	return nil
+}
+
+// SelectOption 在 <select> 上选择某项。target 用于定位 select 元素(文本/label/CSS),
+// value 按 label 匹配选项(也兼容 value)。空 target 或 value 会被拒绝。
+func (p *Page) SelectOption(target, value string) error {
+	if strings.TrimSpace(target) == "" {
+		return fmt.Errorf("select target is required")
+	}
+	if strings.TrimSpace(value) == "" {
+		return fmt.Errorf("select value is required")
+	}
+	loc := p.locatorFor(target)
+	if loc == nil {
+		return fmt.Errorf("element not found for %q", target)
+	}
+	// 优先按 label 选,失败再按 value 选。
+	labels := []string{value}
+	if _, err := loc.First().SelectOption(playwright.SelectOptionValues{Labels: &labels}); err != nil {
+		values := []string{value}
+		if _, err := loc.First().SelectOption(playwright.SelectOptionValues{Values: &values}); err != nil {
+			return fmt.Errorf("select %q=%q: %w", target, value, err)
+		}
+	}
+	return nil
+}
+
 // Click 按目标描述点击元素。若目标是页面内链接则等价于导航;否则点击匹配元素。
 func (p *Page) Click(ctx context.Context, target string) error {
 	if strings.TrimSpace(target) == "" {

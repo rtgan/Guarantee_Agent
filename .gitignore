@@ -26,9 +26,13 @@ go.work.sum
 
 # env file
 .env
+settings.json
 
 # Editor/IDE
 # .idea/
 # .vscode/
 
 .DS_Store
+
+# scripts
+操作示例.md

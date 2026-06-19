@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"guarantee-agent/internal/agent"
 	"guarantee-agent/internal/config"
@@ -136,16 +137,44 @@ func Run(ctx context.Context, opts RunOptions) (Summary, error) {
 	return summary, nil
 }
 
-// templateVars 构造一次 run 的严格模板变量 map。原项目支持的全部 key 都被填充;
-// RenderTemplate 对未知或空值会报错,因此使用 USERNAME/PASSWORD 但未提供时用例会失败。
+// templateVars 构造一次 run 的模板变量 map。
+//
+// 变量来源(任意 {{VAR}} 都能匹配,不局限于固定几个):
+//   - 内置变量:BASE_URL(来自 --url)、LOGIN_BASE_URL、ENV。
+//   - 环境变量:所有以 AUTOQA_ 开头的变量,去掉前缀后作为变量名
+//     (例如 .env 里 AUTOQA_USERNAME=alice → 用例里用 {{USERNAME}});
+//     同时也收录不带前缀的同名变量作兜底。
+//
+// 用例需要的变量本来就不确定(可能要 {{TENANT}}、{{OTP}} 等),所以这里不写死变量名,
+// 而是把环境里能提供的全部备齐,交给 markdown.RenderTemplate 严格替换——
+// 用例引用了未提供或空值的变量时会报错,绝不静默跳过。
+//
+// 提示:敏感值(账号密码、token)最好直接在用例里写死,而不是放进 .env 用模板注入,
+// 因为模板值会被记录到 IR/日志/导出文件里,容易泄露。
 func templateVars(baseURL, envName string) map[string]string {
-	return map[string]string{
+	vars := map[string]string{
 		"BASE_URL":       baseURL,
 		"LOGIN_BASE_URL": first(os.Getenv("AUTOQA_LOGIN_BASE_URL"), baseURL),
 		"ENV":            envName,
-		"USERNAME":       os.Getenv("AUTOQA_USERNAME"),
-		"PASSWORD":       os.Getenv("AUTOQA_PASSWORD"),
 	}
+	// 收录所有 AUTOQA_* 环境变量(去前缀)及不带前缀的同名变量。
+	// 空值也收录,交给 RenderTemplate 报"变量为空",比直接报"未知变量"更准。
+	for _, kv := range os.Environ() {
+		key, val, ok := strings.Cut(kv, "=")
+		if !ok {
+			continue
+		}
+		name := key
+		if strings.HasPrefix(key, "AUTOQA_") {
+			name = strings.TrimPrefix(key, "AUTOQA_")
+		}
+		// 内置变量优先保留,不被环境变量覆盖。
+		if _, exists := vars[name]; exists {
+			continue
+		}
+		vars[name] = val
+	}
+	return vars
 }
 
 // first 返回第一个非空字符串参数,没有则返回 ""。

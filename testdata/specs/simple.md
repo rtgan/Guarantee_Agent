@@ -1,8 +1,8 @@
-# Fixture smoke
+# 冒烟测试
 
-## Preconditions
-- The fixture page is available.
+## 前置条件
+- 测试页面已可访问。
 
-## Steps
-1. Navigate to {{BASE_URL}}
-2. Verify Example Domain text is visible
+## 步骤
+1. 打开 {{BASE_URL}}
+2. 验证页面上能看到 "Example Domain" 文字

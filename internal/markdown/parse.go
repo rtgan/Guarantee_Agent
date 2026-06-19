@@ -10,28 +10,28 @@ import (
 	"github.com/yuin/goldmark/text"
 )
 
-// expectedPrefix 匹配行首/条目开头的 "Expected:" 子句(可带列表符号),
+// expectedPrefix 匹配行首/条目开头的 "Expected:" 或中文"预期:"子句(可带列表符号),
 // 用于把子句与步骤正文分离。
-var expectedPrefix = regexp.MustCompile(`(?is)^[\s\-•]*expected:\s*`)
+var expectedPrefix = regexp.MustCompile(`(?is)^[\s\-•]*(?:expected|预期)[:：]\s*`)
 
-// trailingExpected 匹配内联的 "动作\nExpected: 结果" 形式,
+// trailingExpected 匹配内联的 "动作\nExpected: 结果" 或 "动作\n预期: 结果" 形式,
 // 使相邻两行的步骤与其预期结果能被正确拆分。
-var trailingExpected = regexp.MustCompile(`(?is)^(.+?)\n\s*[-•]?\s*expected:\s*(.+)$`)
+var trailingExpected = regexp.MustCompile(`(?is)^(.+?)\n\s*[-•]?\s*(?:expected|预期)[:：]\s*(.+)$`)
 
-// Parse 解析 Markdown 验收用例。
+// Parse 解析 Markdown 验收用例。支持中英文标题。
 //
 // 必需结构:
-//   - 一个 `## Preconditions` 小节,且至少包含一个列表项。
-//   - 一个有序(编号)步骤列表,最好位于 `## Steps` 下。
-//     若没有 `## Steps`,则取 Preconditions 之后的第一个有序列表。
+//   - 一个前置条件小节(`## Preconditions` 或 `## 前置条件`),且至少包含一个列表项。
+//   - 一个有序(编号)步骤列表,最好位于 `## Steps` 或 `## 步骤` 下。
+//     若没有该小节,则取前置条件之后的第一个有序列表。
 //
-// 步骤编号保留 Markdown 列表的起始值。每个步骤可带 `Expected:` 子句(嵌套或内联)。
+// 步骤编号保留 Markdown 列表的起始值。每个步骤可带 `Expected:` 或 `预期:` 子句(嵌套或内联)。
 // 以 Verify/Assert/验证/断言 开头的步骤被分类为 assertion。
 func Parse(input string) (*Spec, error) {
 	source := []byte(input)
 	root := goldmark.DefaultParser().Parse(text.NewReader(source))
 	children := nodeChildren(root)
-	preIdx := findH2(children, source, "preconditions", 0)
+	preIdx := findH2(children, source, []string{"preconditions", "前置条件", "前置条件"}, 0)
 	if preIdx < 0 {
 		return nil, &ParseError{Code: "MARKDOWN_MISSING_PRECONDITIONS", Message: "Missing required section: ## Preconditions."}
 	}
@@ -49,7 +49,7 @@ func Parse(input string) (*Spec, error) {
 		return nil, &ParseError{Code: "MARKDOWN_EMPTY_PRECONDITIONS", Message: "Preconditions section is present but contains no list items."}
 	}
 	var stepsList *ast.List
-	stepsIdx := findH2(children, source, "steps", preIdx+1)
+	stepsIdx := findH2(children, source, []string{"steps", "步骤"}, preIdx+1)
 	if stepsIdx >= 0 {
 		st, en := sectionRange(children, stepsIdx)
 		for i := st; i < en; i++ {
@@ -98,11 +98,17 @@ func firstTitle(nodes []ast.Node, source []byte) string {
 	return ""
 }
 
-// findH2 返回从 start 起、文本与 name 相等(不区分大小写)的第一个 H2 的下标,没有则 -1。
-func findH2(nodes []ast.Node, source []byte, name string, start int) int {
+// findH2 返回从 start 起、文本与任一别名相等(不区分大小写)的第一个 H2 的下标,没有则 -1。
+// 同时支持英文与中文标题别名,例如 preconditions / 前置条件。
+func findH2(nodes []ast.Node, source []byte, names []string, start int) int {
 	for i := start; i < len(nodes); i++ {
-		if h, ok := nodes[i].(*ast.Heading); ok && h.Level == 2 && strings.EqualFold(strings.TrimSpace(nodeText(h, source)), name) {
-			return i
+		if h, ok := nodes[i].(*ast.Heading); ok && h.Level == 2 {
+			text := strings.TrimSpace(nodeText(h, source))
+			for _, name := range names {
+				if strings.EqualFold(text, name) {
+					return i
+				}
+			}
 		}
 	}
 	return -1
@@ -210,7 +216,7 @@ func extractListItem(item ast.Node, source []byte) extracted {
 func ClassifyStepKind(text string) StepKind {
 	t := strings.TrimSpace(text)
 	lower := strings.ToLower(t)
-	if strings.HasPrefix(lower, "verify") || strings.HasPrefix(lower, "assert") || strings.HasPrefix(t, "验证") || strings.HasPrefix(t, "断言") {
+	if strings.HasPrefix(t, "验证") || strings.HasPrefix(t, "断言") || strings.HasPrefix(lower, "verify") || strings.HasPrefix(lower, "assert") {
 		return StepKindAssertion
 	}
 	return StepKindAction
