@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>AutoQA Loading</title>
+  <style>
+    body { font-family: sans-serif; margin: 24px; }
+    #spinner { display: inline-block; }
+    #spinner::after { content: 'Loading...'; }
+    #content { display: none; color: #060; font-weight: bold; }
+    #delayed { display: none; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h1>AutoQA Loading Fixture</h1>
+
+  <button id="loadBtn" type="button" onclick="load()">Load data</button>
+  <p id="spinner" style="display:none;"></p>
+  <p id="content">Data loaded successfully</p>
+
+  <p>Or wait for the delayed element:</p>
+  <button id="delayBtn" type="button" onclick="delay()">Show delayed</button>
+  <p id="delayed">Delayed element appeared</p>
+
+  <script>
+    function load() {
+      document.getElementById('spinner').style.display = 'block';
+      document.getElementById('content').style.display = 'none';
+      setTimeout(function () {
+        document.getElementById('spinner').style.display = 'none';
+        document.getElementById('content').style.display = 'block';
+      }, 800);
+    }
+    function delay() {
+      setTimeout(function () {
+        document.getElementById('delayed').style.display = 'block';
+      }, 1000);
+    }
+  </script>
+</body>
+</html>

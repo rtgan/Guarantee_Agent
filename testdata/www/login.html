@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>AutoQA Login</title>
+  <style>
+    body { font-family: sans-serif; margin: 40px; }
+    label { display: block; margin-top: 12px; }
+    .error { color: #c00; font-weight: bold; display: none; }
+  </style>
+</head>
+<body>
+  <h1>Sign In</h1>
+  <p>Use any non-empty username and password to log in.</p>
+
+  <form id="loginForm" onsubmit="return false;">
+    <label for="username">Username</label>
+    <input id="username" type="text" placeholder="enter username" />
+
+    <label for="password">Password</label>
+    <input id="password" type="password" placeholder="enter password" />
+
+    <button id="loginBtn" type="button" onclick="onLogin()">Login</button>
+  </form>
+
+  <p id="errorMsg" class="error">Invalid username or password</p>
+
+  <script>
+    function onLogin() {
+      var u = document.getElementById('username').value;
+      var p = document.getElementById('password').value;
+      var err = document.getElementById('errorMsg');
+      if (u && p) {
+        err.style.display = 'none';
+        window.location.href = 'dashboard.html?user=' + encodeURIComponent(u);
+      } else {
+        err.style.display = 'block';
+      }
+    }
+  </script>
+</body>
+</html>

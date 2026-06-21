@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>AutoQA Validation</title>
+  <style>
+    body { font-family: sans-serif; margin: 24px; }
+    label { display: block; margin-top: 12px; }
+    .err { color: #c00; font-size: 12px; display: none; }
+    input.invalid { border-color: #c00; }
+    #success { color: #060; font-weight: bold; display: none; }
+  </style>
+</head>
+<body>
+  <h1>AutoQA Validation Fixture</h1>
+
+  <form id="form" onsubmit="return false;">
+    <label for="name">Name (required)</label>
+    <input id="name" type="text" />
+    <p id="nameErr" class="err">Name is required</p>
+
+    <label for="email">Email (required)</label>
+    <input id="email" type="text" />
+    <p id="emailErr" class="err">Enter a valid email</p>
+
+    <label for="age">Age (18-99)</label>
+    <input id="age" type="number" />
+    <p id="ageErr" class="err">Age must be between 18 and 99</p>
+
+    <label><input id="agree" type="checkbox" /> I agree to the terms</label>
+    <p id="agreeErr" class="err">You must agree to the terms</p>
+
+    <button id="submitBtn" type="button" onclick="onSubmit()">Submit</button>
+  </form>
+
+  <p id="success">Form is valid and submitted</p>
+
+  <script>
+    function setError(field, errId, show) {
+      document.getElementById(field).classList.toggle('invalid', show);
+      document.getElementById(errId).style.display = show ? 'block' : 'none';
+    }
+    function onSubmit() {
+      var ok = true;
+      var name = document.getElementById('name').value.trim();
+      setError('name', 'nameErr', !name); if (!name) ok = false;
+
+      var email = document.getElementById('email').value.trim();
+      var emailOk = /^[^@]+@[^@]+\.[^@]+$/.test(email);
+      setError('email', 'emailErr', !emailOk); if (!emailOk) ok = false;
+
+      var age = parseInt(document.getElementById('age').value, 10);
+      var ageOk = !isNaN(age) && age >= 18 && age <= 99;
+      setError('age', 'ageErr', !ageOk); if (!ageOk) ok = false;
+
+      var agree = document.getElementById('agree').checked;
+      setError('agree', 'agreeErr', !agree); if (!agree) ok = false;
+
+      document.getElementById('success').style.display = ok ? 'block' : 'none';
+    }
+  </script>
+</body>
+</html>
