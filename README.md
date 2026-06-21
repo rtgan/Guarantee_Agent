@@ -1,8 +1,10 @@
 # Guarantee_Agent
 
-【进一步目标：容器化】
+> 🎧 一个全程 vibe coding 出来的项目 —— 没写一行 PRD，需求代码全靠跟 AI 对话聊出来。下面这段介绍，同样是和 AI 边聊边改的产物。
 
-让 Markdown 测试用例自己跑起来的 AI 测试工具。核心理念：**文档即测试**。你用 Markdown 写好验收用例，AI 自动控制真实浏览器帮你执行，记录每一步操作，成功的用例还能导出成 Playwright 测试代码。
+此项目核心理念：**文档即测试**。即：①人工用 Markdown 写好测试用例，AI 自动控制真实浏览器帮执行用例，验证用例每一步是否成功，并记录每一步操作，成功的用例还能导出成 Playwright 测试代码进行回放。②也可令AI对某个url进行自由探索，并输出markdown用例。
+
+这个项目本身就是 vibe coding 的活样本：从最初一个"能不能让 AI 帮我点点网页验个收"的念头开始，没有正式的设计文档，需求在一次次跟 AI 的对话里慢慢长出来——先能解析 Markdown、再加浏览器驱动、又随手补上保护机制防 AI 偷懒(跳过检查或断言)、最后顺手把成功的用例导出成可复用的 Python 测试。代码结构、命名、甚至这个 README，基本都是 AI 写的，人负责提想法和拍板。
 
 ## 能做什么
 
@@ -20,8 +22,8 @@
 | `init` | 初始化配置和示例用例 | `0` 成功 |
 | `run <文件或目录>` | 用 AI + 真实浏览器执行用例，成功后导出 Python 测试 | `0` 全过 / `1` 有失败 / `2` 配置错 |
 | `plan` | 探索网页 + 生成 Markdown 用例（一步到位） | `0` 成功 / `1` 运行错 / `2` 配置错 |
-| `plan-explore` | 只探索网页，写出探索结果（**summary.json**  区别于跑用例时的操作记录流水**ir.jsonl**） | 同上 |
-| `plan-generate` | 只从探索结果生成用例 | 同上 |
+| `plan-explore` | 只探索网页，写出探索结果（**summary.json**  区别于run用例时的操作记录流水**ir.jsonl**） | 同上 |
+| `plan-generate` | 只从探索结果生成md用例 | 同上 |
 
 退出码统一：`0` 成功、`1` 运行失败、`2` 配置错误。
 
@@ -51,7 +53,7 @@
   │  autoqa plan = plan-explore + plan-generate │
   │                                             │
   │  plan-explore: 探索网页 → 探索结果             │
-  │     (探索结果 = summary.json,不是 ir.jsonl)   │
+  │     (探索结果 = summary.json)                │
   │                ↓                            │
   │  plan-generate: 读 summary.json → AI 生成 .md│
   │                ↓                            │
@@ -175,6 +177,9 @@ internal/ir/                      操作记录类型、JSONL 写入和读取
 internal/logging/                 结构化日志（slog JSON）+ URL 脱敏
 internal/plan/                    探索网页 + 生成用例（plan/explore/generate）+ URL 范围过滤
 testdata/                        示例测试用例和测试用的 HTML 页面
+  ├─ www/                        自带静态 fixture 页面（index/form/login/dashboard/modal/validation/search/inputs/tabs/loading/notfound）
+  ├─ specs/                      对应的 Markdown 用例（form/simple/login_flow + 各场景）
+  └─ steps/                      可复用步骤片段（如 login.md）
 ```
 
 ## 整体流程
@@ -292,7 +297,9 @@ tools.Registry.EinoTools                [internal/tools/registry.go]
 
 ### 浏览器抽象（Playwright）
 
-`internal/browser.Page` 控制真实 Chromium：
+> **先澄清一个常见误解**：Playwright 本身不是浏览器，而是一套用 CDP（Chrome DevTools Protocol）远程控制真实浏览器的库——相当于"遥控器"，真正渲染页面的是浏览器。它也不复用你系统里日常用的那个 Chrome，而是通过 `playwright install chromium` 下载一份独立的 Chromium，由 Playwright 驱动进程拉起并控制。所以本项目的操作是"在本机跑真实 Chromium"，不是"用 Playwright 虚拟浏览器"。`--headless` 只控制这个 Chromium 显不显示窗口，两种模式都是同一个真实 Chromium。
+
+`internal/browser.Page` 通过 Playwright 在本机拉起并控制一个真实 Chromium：
 
 - `NewPage(baseURL, runDir, headless)`：启动 Playwright → Chromium → context（1440×900）→ page。
 - `Navigate`：`page.Goto`，等 DOMContentLoaded 事件，HTTP 状态码 < 400 才算成功。

@@ -1,0 +1,24 @@
+如何使用输出的 py 用例？
+
+1、先配置好环境
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+playwright install chromium
+
+2、执行用例（需先起被测页面服务器：python3 -m http.server 18090 --directory testdata/www &）
+export AUTOQA_BASE_URL=http://127.0.0.1:18090
+
+py用例两种跑法：
+- 直接运行（走文件末尾 if __name__=="__main__" 块，自建 browser，无需 pytest fixture）：
+  AUTOQA_BASE_URL=http://127.0.0.1:18090 python tests/autoqa/test_simple.py
+
+- 或用 pytest（需 pytest-playwright 注入 page fixture）：
+  AUTOQA_BASE_URL=http://127.0.0.1:18090 pytest tests/autoqa/
+
+说明：导出的用例是"占位样板"——动作步骤（点击/填写等）只生成注释，不回放真实操作；
+带 Expected:/Verify/验证 的步骤生成 expect(...).to_be_visible() 断言。因此涉及"点击后才出现"
+的断言可能失败，属导出器设计局限，非 bug。
+
+每跑通一个 Markdown 用例，runner 会自动把对应的 test_<spec>.py 导出到 tests/autoqa/；
+该目录下的文件会随通过用例增多而增长，是产物而非手写源码，可随时删除后重跑生成。
+（本项目自带的 fixture 页面在 testdata/www/，对应用例在 testdata/specs/。）

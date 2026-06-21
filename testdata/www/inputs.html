@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>AutoQA Inputs</title>
+  <style>
+    body { font-family: sans-serif; margin: 24px; }
+    label { display: block; margin-top: 12px; }
+    fieldset { margin-top: 12px; }
+    #out { margin-top: 16px; font-weight: bold; color: #006; }
+  </style>
+</head>
+<body>
+  <h1>AutoQA Inputs Fixture</h1>
+
+  <fieldset>
+    <legend>Subscribe to</legend>
+    <label><input type="checkbox" name="sub" value="news" /> News</label>
+    <label><input type="checkbox" name="sub" value="deals" /> Deals</label>
+    <label><input type="checkbox" name="sub" value="updates" /> Updates</label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Plan</legend>
+    <label><input type="radio" name="plan" value="free" /> Free</label>
+    <label><input type="radio" name="plan" value="pro" /> Pro</label>
+    <label><input type="radio" name="plan" value="team" /> Team</label>
+  </fieldset>
+
+  <label for="birth">Birth date</label>
+  <input id="birth" type="date" />
+
+  <label for="volume">Volume: <span id="volVal">50</span></label>
+  <input id="volume" type="range" min="0" max="100" value="50" oninput="document.getElementById('volVal').textContent=this.value" />
+
+  <label for="bio">Bio</label>
+  <textarea id="bio" rows="3"></textarea>
+
+  <label for="color">Favorite color</label>
+  <select id="color">
+    <option value="">-- choose --</option>
+    <option value="red">Red</option>
+    <option value="green">Green</option>
+    <option value="blue">Blue</option>
+  </select>
+
+  <button id="saveBtn" type="button" onclick="save()">Save</button>
+  <p id="out"></p>
+
+  <script>
+    function save() {
+      var subs = Array.prototype.slice.call(document.querySelectorAll('input[name=sub]:checked')).map(function (c) { return c.value; });
+      var plan = (document.querySelector('input[name=plan]:checked') || {}).value || 'none';
+      var out = 'plan=' + plan + '; subs=' + (subs.join('+') || 'none') +
+        '; birth=' + (document.getElementById('birth').value || '-') +
+        '; vol=' + document.getElementById('volume').value +
+        '; color=' + (document.getElementById('color').value || '-');
+      document.getElementById('out').textContent = out;
+    }
+  </script>
+</body>
+</html>

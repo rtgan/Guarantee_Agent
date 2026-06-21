@@ -31,6 +31,9 @@ func newRunCommand() *cobra.Command {
 			return nil
 		},
 	}
+
+	//告诉 cobra「命令支持一个叫 --xxx 的参数」，并把用户在命令行里填的值，自动塞进要执行的CMD
+	// 第一个变量值来自于命令行所赋
 	cmd.Flags().StringVar(&url, "url", "", "base URL")
 	cmd.Flags().StringVar(&envName, "env", "", "environment name for .env.<name>")
 	cmd.Flags().BoolVar(&headless, "headless", true, "run headless")

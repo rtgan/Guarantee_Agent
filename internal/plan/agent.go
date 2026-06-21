@@ -126,24 +126,9 @@ func GenerateSpecs(ctx context.Context, cfg config.AutoqaConfig, exploreResult E
 	m := baseModel
 
 	summary, _ := json.Marshal(exploreResult)
+	uiLanguage := os.Getenv("AUTOQA_UI_LANGUAGE")
 	messages := []*schema.Message{
-		schema.SystemMessage(strings.TrimSpace(`You generate Markdown acceptance test specs.
-Output ONLY raw Markdown (no prose, no code fence) with this exact structure:
-
-# <title>
-
-## Preconditions
-- <precondition>
-
-## Steps
-1. Navigate to {{BASE_URL}}
-2. Verify <something visible on the page>
-
-Rules:
-- The Markdown MUST contain a "## Preconditions" section with at least one list item.
-- Steps MUST be an ordered (numbered) list.
-- At least one step must start with "Verify" and assert text that is actually visible on the explored page.
-- Use {{BASE_URL}} for the URL, never a literal URL.`)),
+		schema.SystemMessage(generateSpecSystemPrompt(uiLanguage)),
 		schema.UserMessage(fmt.Sprintf("Explored page summary:\n%s\n\nGenerate one Markdown test spec.", string(summary))),
 	}
 
@@ -171,6 +156,50 @@ Rules:
 		logger.Info("spec generated", "path", path, "steps", len(parsed.Steps))
 	}
 	return []string{path}, nil
+}
+
+// generateSpecSystemPrompt 根据 AUTOQA_UI_LANGUAGE 决定生成中文还是英文用例。
+// 中文时用中文模板与关键字(验证/断言、预期:),英文时用英文模板(Verify/Assert、Expected:)。
+// 两种语言下断言关键字约束对等,确保生成的用例都能被 markdown.Parse 正确分类为断言步骤。
+func generateSpecSystemPrompt(uiLanguage string) string {
+	if strings.HasPrefix(strings.ToLower(uiLanguage), "zh") {
+		return strings.TrimSpace(`你负责生成 Markdown 验收测试用例。
+只输出原始 Markdown(不要任何说明文字,不要代码围栏),严格使用如下结构:
+
+# <标题>
+
+## 前置条件
+- <前置条件>
+
+## 步骤
+1. 打开 {{BASE_URL}}
+2. 验证 <页面上实际可见的内容>
+
+规则:
+- Markdown 必须包含 "## 前置条件" 小节,且至少一个列表项。
+- 步骤必须是有序(编号)列表。
+- 至少一个步骤必须以 "验证" 或 "断言" 开头,并断言页面上实际可见的文本。
+- 也可使用 "预期:" 子句描述某步骤的预期结果。
+- URL 一律用 {{BASE_URL}},绝不使用字面量 URL。`)
+	}
+	return strings.TrimSpace(`You generate Markdown acceptance test specs.
+Output ONLY raw Markdown (no prose, no code fence) with this exact structure:
+
+# <title>
+
+## Preconditions
+- <precondition>
+
+## Steps
+1. Navigate to {{BASE_URL}}
+2. Verify <something visible on the page>
+
+Rules:
+- The Markdown MUST contain a "## Preconditions" section with at least one list item.
+- Steps MUST be an ordered (numbered) list.
+- At least one step must start with "Verify" or "Assert" and assert text that is actually visible on the explored page.
+- You may use an "Expected:" clause to describe a step's expected result.
+- Use {{BASE_URL}} for the URL, never a literal URL.`)
 }
 
 var jsonRe = regexp.MustCompile(`(?s)\{.*\}`)

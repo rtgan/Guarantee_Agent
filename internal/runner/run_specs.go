@@ -20,16 +20,16 @@ type RunOptions struct {
 	Path     string // 要运行的 Markdown 文件或目录
 	BaseURL  string // 目标基址 URL(命令行;回退到 env/config)
 	EnvName  string // 选择 .env.<name>
-	Headless bool   // 无头模式(为真实浏览器实现预留)
+	Headless bool   // 无头模式(为真实浏览器实现预留)，后台跑不弹窗
 	Debug    bool   // 调试/详细模式;与 Headless 冲突
 	CWD      string // 用于解析配置/用例/产物的工作目录
 }
 
 // Summary 是一次 run 跨全部已发现用例的聚合结果。
 type Summary struct {
-	RunID                 string
-	Total, Passed, Failed int
-	RunDir                string
+	RunID                 string // 每次 run 的唯一标识
+	Total, Passed, Failed int    // 用例总数、通过数、失败数
+	RunDir                string // 本次 run 的产物目录
 }
 
 // Run 执行完整的 `autoqa run` 流程:
@@ -56,13 +56,13 @@ func Run(ctx context.Context, opts RunOptions) (Summary, error) {
 		return Summary{}, err
 	}
 
-	// 基址 URL 优先级:命令行 > 环境变量 > 配置 plan.baseUrl。
-	baseURL := opts.BaseURL
+	// 基址 URL 优先级:命令行(--url) > .env环境变量 > 配置 plan.baseUrl。
+	baseURL := opts.BaseURL // 1. --url 命令行参数
 	if baseURL == "" {
-		baseURL = os.Getenv("AUTOQA_BASE_URL")
+		baseURL = os.Getenv("AUTOQA_BASE_URL") // 2. 环境变量 / .env 里的 AUTOQA_BASE_URL
 	}
 	if baseURL == "" {
-		baseURL = cfg.Plan.BaseURL
+		baseURL = cfg.Plan.BaseURL // 3. 配置文件(config)里的 plan.baseUrl————现没配
 	}
 	if baseURL == "" {
 		return Summary{}, fmt.Errorf("base URL is required via --url, AUTOQA_BASE_URL, or config plan.baseUrl")
@@ -71,6 +71,13 @@ func Run(ctx context.Context, opts RunOptions) (Summary, error) {
 	paths, err := specs.Discover(opts.Path)
 	if err != nil {
 		return Summary{}, err
+	}
+
+	// specsRoot 用于导出时把 specPath 转成可区分的 slug,避免同 basename
+	// 跨子目录的用例互相覆盖:opts.Path 是目录就用它,是文件就用其父目录。
+	specsRoot := opts.Path
+	if fi, err := os.Stat(opts.Path); err == nil && !fi.IsDir() {
+		specsRoot = filepath.Dir(opts.Path)
 	}
 
 	runID := logging.RunID()
@@ -130,7 +137,7 @@ func Run(ctx context.Context, opts RunOptions) (Summary, error) {
 		}
 		summary.Passed++
 		// 仅在成功时导出,绝不生成不稳定测试。
-		if err := ExportPlaceholder(opts.CWD, cfg.ExportDir, p, spec); err != nil {
+		if err := ExportPlaceholder(opts.CWD, cfg.ExportDir, p, spec, specsRoot); err != nil {
 			logger.Error("export failed", "path", p, "error", err)
 		}
 	}

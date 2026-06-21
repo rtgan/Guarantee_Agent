@@ -13,7 +13,7 @@ type Step struct {
 	Index          int      `json:"index"`                    // 1-based 编号,保留列表起始值
 	Text           string   `json:"text"`                     // 步骤正文指令
 	ExpectedResult string   `json:"expectedResult,omitempty"` // 可选的 "Expected:" 子句
-	Kind           StepKind `json:"kind"`                     // 动作或断言
+	Kind           StepKind `json:"kind"`                     // 动作或断言【StepKindAction/StepKindAssertion】
 }
 
 // Spec 是已解析的 Markdown 验收用例。

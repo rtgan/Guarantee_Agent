@@ -35,4 +35,7 @@ settings.json
 .DS_Store
 
 # scripts
-操作示例.md
+*示例.md
+*prep.md
+.autoqa/*
+tests/autoqa/*.py

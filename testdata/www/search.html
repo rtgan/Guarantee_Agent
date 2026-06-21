@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>AutoQA Search</title>
+  <style>
+    body { font-family: sans-serif; margin: 24px; }
+    #q { width: 240px; padding: 4px; }
+    ul { list-style: none; padding: 0; }
+    li { padding: 6px 8px; border-bottom: 1px solid #eee; }
+    #empty { color: #888; display: none; }
+  </style>
+</head>
+<body>
+  <h1>AutoQA Search Fixture</h1>
+
+  <input id="q" type="text" placeholder="search fruits..." oninput="filter()" />
+  <ul id="list"></ul>
+  <p id="empty">No results</p>
+
+  <script>
+    var items = ['Apple', 'Banana', 'Cherry', 'Grape', 'Lemon', 'Mango', 'Orange', 'Peach', 'Pear', 'Plum'];
+    function render(list) {
+      var ul = document.getElementById('list');
+      ul.innerHTML = '';
+      list.forEach(function (it) {
+        var li = document.createElement('li');
+        li.textContent = it;
+        ul.appendChild(li);
+      });
+      document.getElementById('empty').style.display = list.length ? 'none' : 'block';
+    }
+    function filter() {
+      var q = document.getElementById('q').value.toLowerCase();
+      render(items.filter(function (it) { return it.toLowerCase().indexOf(q) !== -1; }));
+    }
+    render(items);
+  </script>
+</body>
+</html>

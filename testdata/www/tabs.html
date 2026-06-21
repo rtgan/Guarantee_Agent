@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>AutoQA Tabs</title>
+  <style>
+    body { font-family: sans-serif; margin: 24px; }
+    .tabs button { padding: 6px 14px; cursor: pointer; }
+    .tabs button.active { font-weight: bold; border-bottom: 2px solid #006; }
+    .panel { display: none; margin-top: 16px; padding: 12px; border: 1px solid #ddd; }
+    .panel.active { display: block; }
+  </style>
+</head>
+<body>
+  <h1>AutoQA Tabs Fixture</h1>
+
+  <div class="tabs">
+    <button id="tabProfile" class="active" onclick="switchTab('profile')">Profile</button>
+    <button id="tabSettings" onclick="switchTab('settings')">Settings</button>
+    <button id="tabNotes" onclick="switchTab('notes')">Notes</button>
+  </div>
+
+  <div id="panelProfile" class="panel active">
+    <h2>Profile</h2>
+    <p>Name: Alice</p>
+    <p>Email: alice@example.com</p>
+  </div>
+
+  <div id="panelSettings" class="panel">
+    <h2>Settings</h2>
+    <label><input id="notify" type="checkbox" /> Email notifications</label>
+  </div>
+
+  <div id="panelNotes" class="panel">
+    <h2>Notes</h2>
+    <textarea id="noteText" rows="3" placeholder="write a note"></textarea>
+    <button id="saveNote" type="button" onclick="saveNote()">Save</button>
+    <p id="noteSaved" style="display:none; color:#060; font-weight:bold;">Note saved</p>
+  </div>
+
+  <script>
+    function switchTab(name) {
+      ['profile', 'settings', 'notes'].forEach(function (t) {
+        document.getElementById('tab' + cap(t)).classList.toggle('active', t === name);
+        document.getElementById('panel' + cap(t)).classList.toggle('active', t === name);
+      });
+    }
+    function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+    function saveNote() {
+      if (document.getElementById('noteText').value) {
+        document.getElementById('noteSaved').style.display = 'block';
+      }
+    }
+  </script>
+</body>
+</html>

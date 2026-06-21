@@ -31,7 +31,7 @@ func Parse(input string) (*Spec, error) {
 	source := []byte(input)
 	root := goldmark.DefaultParser().Parse(text.NewReader(source))
 	children := nodeChildren(root)
-	preIdx := findH2(children, source, []string{"preconditions", "前置条件", "前置条件"}, 0)
+	preIdx := findH2(children, source, []string{"preconditions", "前置条件"}, 0)
 	if preIdx < 0 {
 		return nil, &ParseError{Code: "MARKDOWN_MISSING_PRECONDITIONS", Message: "Missing required section: ## Preconditions."}
 	}

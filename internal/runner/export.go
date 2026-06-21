@@ -2,27 +2,49 @@ package runner
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"guarantee-agent/internal/markdown"
 )
+
+// urlRegexp 匹配步骤文本中第一个 http(s) URL(到空白为止)。
+var urlRegexp = regexp.MustCompile(`https?://[^\s]+`)
+
+// navVerbPrefixes 是常见导航动词前缀(英文小写;中文 ToLower 后不变)。
+// 仅用于清理,URL 提取本身靠 urlRegexp,因此动词不匹配也不影响提取。
+var navVerbPrefixes = []string{
+	"navigate to ", "open ", "go to ", "visit ", "browse to ", "load ",
+	"打开", "访问", "进入", "前往", "跳转到",
+}
+
+// visibilitySuffixes 是可见性/存在性后缀,断言目标与预期结果共用。
+var visibilitySuffixes = []string{
+	" text is visible", " is visible", " text exists", " exists", "可见", "存在",
+}
 
 // ExportPlaceholder 为一次成功 run 写出 Playwright 风格的 Python 用例文件(pytest)。
 //
 // 每个 Markdown 步骤生成一段带注释的步骤块:带 Expected 子句或断言步骤生成
 // expect(...).to_be_visible,纯动作步骤生成注释占位(具体定位器应由更完整的 IR 记录器提供)。
 // 生成的文件是有意保持可运行的样板,用以文档化本次 run。
-func ExportPlaceholder(cwd, exportDir, specPath string, spec *markdown.Spec) error {
+//
+// specsRoot 是用例发现根目录(用于把 specPath 转成可区分的 slug,避免同 basename
+// 跨子目录的用例互相覆盖);为空时退化为用 basename。
+func ExportPlaceholder(cwd, exportDir, specPath string, spec *markdown.Spec, specsRoot string) error {
 	if exportDir == "" {
 		exportDir = "tests/autoqa"
 	}
 	if err := os.MkdirAll(filepath.Join(cwd, exportDir), 0755); err != nil {
 		return err
 	}
+	slug := specSlug(specPath, specsRoot)
+	ident := strings.ReplaceAll(slug, "-", "_") // 文件名与函数名统一用下划线
 	// pytest 要求测试文件以 test_ 开头。
-	name := "test_" + sanitize(strings.TrimSuffix(filepath.Base(specPath), filepath.Ext(specPath))) + ".py"
+	name := "test_" + ident + ".py"
 	path := filepath.Join(cwd, exportDir, name)
 
 	var b strings.Builder
@@ -32,15 +54,16 @@ func ExportPlaceholder(cwd, exportDir, specPath string, spec *markdown.Spec) err
 
 	title := spec.Title
 	if title == "" {
-		title = strings.TrimSuffix(filepath.Base(specPath), filepath.Ext(specPath))
+		title = ident
 	}
-	fmt.Fprintf(&b, "def %s(page: Page) -> None:\n", pyFuncName(title))
-	b.WriteString("    page.goto(os.environ.get(\"AUTOQA_BASE_URL\", \"/\"))\n")
+	funcName := pyFuncName(title, ident)
+	fmt.Fprintf(&b, "def %s(page: Page) -> None:\n", funcName)
+	b.WriteString(gotoLine(spec) + "\n")
 	for _, step := range spec.Steps {
 		fmt.Fprintf(&b, "    # Step %d: %s\n", step.Index, step.Text)
 		switch {
 		case step.ExpectedResult != "":
-			fmt.Fprintf(&b, "    expect(page.get_by_text(%s).first).to_be_visible()\n", pyStr(step.ExpectedResult))
+			fmt.Fprintf(&b, "    expect(page.get_by_text(%s).first).to_be_visible()\n", pyStr(exportExpectedTarget(step.ExpectedResult)))
 		case step.Kind == markdown.StepKindAssertion:
 			fmt.Fprintf(&b, "    expect(page.get_by_text(%s).first).to_be_visible()\n", pyStr(exportAssertionTarget(step.Text)))
 		default:
@@ -52,27 +75,109 @@ func ExportPlaceholder(cwd, exportDir, specPath string, spec *markdown.Spec) err
 	fmt.Fprintf(&b, "    with sync_playwright() as p:\n")
 	fmt.Fprintf(&b, "        browser = p.chromium.launch()\n")
 	fmt.Fprintf(&b, "        page = browser.new_page()\n")
-	fmt.Fprintf(&b, "        %s(page)\n", pyFuncName(title))
+	fmt.Fprintf(&b, "        %s(page)\n", funcName)
 	fmt.Fprintf(&b, "        browser.close()\n")
 	return os.WriteFile(path, []byte(b.String()), 0644)
 }
 
-// pyStr 把字符串转成 Python 双引号字面量,转义其中的反斜杠和双引号。
+// gotoLine 生成首行 page.goto。
+//
+// 若第一步是导航步骤且能从中提取出 URL,则生成可移植写法
+// `page.goto(os.environ.get("AUTOQA_BASE_URL", "<host>") + "<path>")`,
+// 把绝对 URL 拆成 host + 相对 path,保留环境变量覆盖能力;无 path 时只传 host。
+// 提取不到 URL(非导航步骤)时回退到根路径。
+func gotoLine(spec *markdown.Spec) string {
+	const fallback = `    page.goto(os.environ.get("AUTOQA_BASE_URL", "/"))`
+	if len(spec.Steps) == 0 {
+		return fallback
+	}
+	host, p, ok := extractGotoTarget(spec.Steps[0].Text)
+	if !ok {
+		return fallback
+	}
+	if p == "" {
+		return fmt.Sprintf(`    page.goto(os.environ.get("AUTOQA_BASE_URL", %s))`, pyStr(host))
+	}
+	return fmt.Sprintf(`    page.goto(os.environ.get("AUTOQA_BASE_URL", %s) + %s)`, pyStr(host), pyStr(p))
+}
+
+// stripNavPrefix 去掉开头的导航动词前缀,返回剩余文本(已 TrimSpace)。
+func stripNavPrefix(s string) string {
+	lower := strings.ToLower(s)
+	for _, p := range navVerbPrefixes {
+		if strings.HasPrefix(lower, p) {
+			return strings.TrimSpace(s[len(p):])
+		}
+	}
+	return s
+}
+
+// extractGotoTarget 从导航步骤文本提取 URL,拆成 (host, path) 两段,供生成
+// page.goto(os.environ.get("AUTOQA_BASE_URL", host) + path)。
+// host 形如 "http://127.0.0.1:18090";path 形如 "/form.html" 或 ""(无路径)。
+// ok=false 表示不是导航步骤或提取不到 URL,调用方应回退默认 goto。
+func extractGotoTarget(stepText string) (host, path string, ok bool) {
+	s := stripNavPrefix(strings.TrimSpace(stepText))
+	m := urlRegexp.FindString(s)
+	if m == "" {
+		return "", "", false
+	}
+	// 去掉可能粘连的尾部中文/英文标点(如 "。" "，" ")")。
+	m = strings.TrimRight(m, ".,;:。，、；）)》>")
+	u, err := url.Parse(m)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return "", "", false
+	}
+	host = u.Scheme + "://" + u.Host
+	path = u.Path
+	if u.RawQuery != "" {
+		path += "?" + u.RawQuery
+	}
+	if path == "" || path == "/" {
+		path = "" // 无路径:默认基址即目标,不拼接
+	}
+	return host, path, true
+}
+
+// pyStr 把字符串转成 Python 双引号字面量,转义反斜杠、双引号和换行/制表等控制字符。
 func pyStr(s string) string {
 	s = strings.ReplaceAll(s, "\\", "\\\\")
 	s = strings.ReplaceAll(s, "\"", "\\\"")
+	s = strings.ReplaceAll(s, "\n", "\\n")
+	s = strings.ReplaceAll(s, "\t", "\\t")
+	s = strings.ReplaceAll(s, "\r", "\\r")
 	return "\"" + s + "\""
 }
 
-// pyFuncName 把标题转成合法的 Python 函数名(test_<snake_case>)。
-func pyFuncName(title string) string {
-	s := "test_" + sanitize(title)
-	// sanitize 已转成小写连字符,这里再转成下划线,并补齐 test_ 前缀。
-	s = strings.ReplaceAll(s, "-", "_")
-	if s == "test_" {
-		s = "test_generated"
+// pyFuncName 把标题转成合法 Python 函数名(test_<snake_case>)。
+// 标题 sanitize 为空(如纯中文)时回退到 fallback(fallback 应已是安全 slug)。
+func pyFuncName(title, fallback string) string {
+	s := sanitize(title)
+	if s == "" {
+		s = fallback
 	}
-	return s
+	s = strings.ReplaceAll(s, "-", "_")
+	if s == "" {
+		s = "generated"
+	}
+	return "test_" + s
+}
+
+// specSlug 把 specPath 相对 specsRoot 的路径(去扩展名)转成安全 slug:
+// 各路径段分别 sanitize,再用下划线连接。specsRoot 为空时退化为 basename。
+// 例: specs/a/login.md (root=specs) -> "a_login"; specs/form.md -> "form"。
+func specSlug(specPath, specsRoot string) string {
+	rel := strings.TrimSuffix(filepath.Base(specPath), filepath.Ext(specPath))
+	if specsRoot != "" {
+		if r, err := filepath.Rel(specsRoot, specPath); err == nil && r != "" && r != "." {
+			rel = strings.TrimSuffix(r, filepath.Ext(r))
+		}
+	}
+	parts := strings.Split(rel, string(filepath.Separator))
+	for i, p := range parts {
+		parts[i] = sanitize(p)
+	}
+	return strings.Join(parts, "_")
 }
 
 // sanitize 把字符串转小写,并用单个连字符替换非字母数字的连续字符,
@@ -94,6 +199,14 @@ func sanitize(s string) string {
 	return strings.Trim(b.String(), "-")
 }
 
+// stripVisibilitySuffix 去掉可见性/存在性后缀并 TrimSpace。
+func stripVisibilitySuffix(s string) string {
+	for _, suffix := range visibilitySuffixes {
+		s = strings.TrimSuffix(s, suffix)
+	}
+	return strings.TrimSpace(s)
+}
+
 // exportAssertionTarget 从断言步骤文本里抽取要断言的目标文本,尽量与运行时
 // AI 实际断言的文本对齐。规则:
 //   - 先去掉 Verify/Assert/验证/断言 前缀;
@@ -110,10 +223,24 @@ func exportAssertionTarget(s string) string {
 	if q := firstQuoted(s); q != "" {
 		return q
 	}
-	for _, suffix := range []string{" text is visible", " is visible", " text exists", " exists", "可见", "存在"} {
-		s = strings.TrimSuffix(s, suffix)
+	if r := stripVisibilitySuffix(s); r != "" {
+		return r
 	}
-	return strings.TrimSpace(s)
+	return s
+}
+
+// exportExpectedTarget 抽取 ExpectedResult 的断言目标文本。
+// 规则:优先取引号内内容;否则剥离可见性后缀。不剥动词前缀(避免误伤
+// "验证码已发送"等合法以"验证"开头的结果)。剥离后为空则回退原文。
+func exportExpectedTarget(s string) string {
+	orig := strings.TrimSpace(s)
+	if q := firstQuoted(orig); q != "" {
+		return q
+	}
+	if r := stripVisibilitySuffix(orig); r != "" {
+		return r
+	}
+	return orig
 }
 
 // firstQuoted 返回 s 中第一段被引号包裹的内容(支持 "..."、“...” 和 '...'),没有则返回 ""。

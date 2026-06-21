@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Dashboard</title>
+  <style>
+    body { font-family: sans-serif; margin: 24px; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; }
+    table { border-collapse: collapse; margin-top: 16px; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
+    th { cursor: pointer; background: #f0f0f0; }
+    #logoutBtn { padding: 4px 12px; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1 id="dashboardTitle">Dashboard</h1>
+    <button id="logoutBtn" type="button" onclick="onLogout()">Logout</button>
+  </div>
+
+  <p>Welcome, <span id="user">guest</span>. You are signed in.</p>
+
+  <table id="usersTable">
+    <thead>
+      <tr>
+        <th id="sortName">Name</th>
+        <th id="sortRole">Role</th>
+        <th id="sortScore">Score</th>
+      </tr>
+    </thead>
+    <tbody id="usersBody"></tbody>
+  </table>
+
+  <p>Sort state: <span id="sortState">Not sorted</span></p>
+
+  <div id="pager" style="margin-top: 12px;">
+    <button id="prevBtn" type="button" onclick="prevPage()">Prev</button>
+    <span id="pageInfo">Page 1</span>
+    <button id="nextBtn" type="button" onclick="nextPage()">Next</button>
+  </div>
+
+  <script>
+    var params = new URLSearchParams(window.location.search);
+    document.getElementById('user').textContent = params.get('user') || 'guest';
+
+    var rows = [
+      ['Alice', 'Admin', 95],
+      ['Bob', 'Editor', 80],
+      ['Carol', 'Viewer', 72],
+      ['Dave', 'Editor', 88],
+      ['Eve', 'Viewer', 60],
+      ['Frank', 'Admin', 91],
+      ['Grace', 'Viewer', 77],
+      ['Heidi', 'Editor', 84]
+    ];
+    var perPage = 3, page = 0, sortKey = null, sortAsc = true;
+
+    function render() {
+      var data = rows.slice();
+      if (sortKey !== null) {
+        data.sort(function (a, b) {
+          return (a[sortKey] > b[sortKey] ? 1 : -1) * (sortAsc ? 1 : -1);
+        });
+      }
+      var start = page * perPage;
+      var slice = data.slice(start, start + perPage);
+      var body = document.getElementById('usersBody');
+      body.innerHTML = '';
+      slice.forEach(function (r) {
+        var tr = document.createElement('tr');
+        r.forEach(function (c) {
+          var td = document.createElement('td');
+          td.textContent = c;
+          tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      });
+      var pages = Math.ceil(data.length / perPage);
+      document.getElementById('pageInfo').textContent = 'Page ' + (page + 1) + ' of ' + pages;
+      document.getElementById('prevBtn').disabled = page === 0;
+      document.getElementById('nextBtn').disabled = page >= pages - 1;
+      var labels = ['Name', 'Role', 'Score'];
+      var state = document.getElementById('sortState');
+      if (sortKey === null) {
+        state.textContent = 'Not sorted';
+      } else {
+        state.textContent = 'Sorted by ' + labels[sortKey] + (sortAsc ? ' ascending' : ' descending');
+      }
+    }
+    function prevPage() { if (page > 0) { page--; render(); } }
+    function nextPage() { if (page < Math.ceil(rows.length / perPage) - 1) { page++; render(); } }
+    function sortBy(i) {
+      if (sortKey === i) { sortAsc = !sortAsc; } else { sortKey = i; sortAsc = true; }
+      render();
+    }
+    document.getElementById('sortName').onclick = function () { sortBy(0); };
+    document.getElementById('sortRole').onclick = function () { sortBy(1); };
+    document.getElementById('sortScore').onclick = function () { sortBy(2); };
+
+    function onLogout() {
+      window.location.href = 'login.html';
+    }
+
+    render();
+  </script>
+</body>
+</html>

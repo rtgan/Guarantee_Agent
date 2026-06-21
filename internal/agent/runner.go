@@ -23,7 +23,7 @@ import (
 // RunOptions 描述执行单个 Markdown 用例所需的全部输入。
 type RunOptions struct {
 	RunID    string              // 唯一 run 标识,会写入 IR 记录和产物路径
-	BaseURL  string              // 目标应用基址 URL
+	BaseURL  string              // 单个目标应用基址 URL
 	SpecPath string              // Markdown 用例文件路径(写入 IR)
 	Spec     *markdown.Spec      // 已解析的用例
 	RunDir   string              // 本次 run 的产物目录(ir.jsonl、截图)
@@ -47,14 +47,14 @@ type Runner struct{ ModelConfig config.ModelConfig }
 // stepStats 记录每个步骤的断言要求:Verify/Assert/Expected 步骤必须有过一次成功断言。
 type stepStats struct{ assertionNeeded, assertionOK bool }
 
-// maxReactRounds 限制单用例 ReAct 循环轮数,作为护栏之外的硬上限。
+// 硬上限 即使没触发任何护栏,ReAct 循环最多也只跑 60 轮,防止模型陷入死循环无限消耗 token。它是代码里写死的,不随配置变
 const maxReactRounds = 60
 
 // Run 针对配置的基址 URL 执行单个 Markdown 用例。
 //
 // 流程:
 //  1. 启动 Playwright 浏览器 Page,创建 IR writer。
-//  2. 构建绑定到该 Page 的 Eino typed 浏览器工具。
+//  2. 构建绑定到该 Page 的 Eino 类型的浏览器工具。
 //  3. 解析 chat 模型(ark=真实豆包;eino-script=离线)并绑定工具 schema。
 //  4. 进入 ReAct 循环:模型生成 → 若有 tool_calls 则逐个执行、回填 tool 消息、
 //     记录 IR、更新护栏;无 tool_calls 则结束。
@@ -134,11 +134,8 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions) (RunResult, error) {
 
 	// ReAct 循环。
 	for round := 0; round < maxReactRounds; round++ {
-		if err := ctx.Err(); err != nil {
+		if err := ctx.Err(); err != nil { // ctx可能超时或取消了
 			return RunResult{Error: err}, err
-		}
-		if err := counters.OnToolCall(limits); err != nil {
-			return RunResult{Error: err, Actions: counters.ToolCalls}, err
 		}
 		assistant, err := m.Generate(ctx, messages)
 		if err != nil {
@@ -153,6 +150,10 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions) (RunResult, error) {
 
 		// 执行每个 tool_call 并回填 tool 结果消息。
 		for _, call := range assistant.ToolCalls {
+			// 护栏:按真实工具调用数计数,执行前检查是否超过 MaxToolCallsPerSpec。
+			if err := counters.OnToolCall(limits); err != nil {
+				return RunResult{Error: err, Actions: counters.ToolCalls}, err
+			}
 			step := parseStepIndexFromArgs(call.Function.Arguments)
 			res := executeTool(ctx, inv, call)
 			// 护栏:按工具结果成败更新计数。

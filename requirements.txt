@@ -1,0 +1,5 @@
+# 导出的 Playwright Python 用例(tests/autoqa/*.py)运行所需依赖。
+# 安装:pip install -r requirements.txt && playwright install chromium
+playwright>=1.40
+pytest>=8.0
+pytest-playwright>=0.5
